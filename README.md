@@ -11,12 +11,7 @@ backend, so the entire site runs from a single server.
 ![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?logo=mysql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 
-<!--
-  CI badge — after pushing to GitHub, replace OWNER/REPO with your repository
-  and uncomment this line:
-
-  ![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)
--->
+![CI](https://github.com/zeemy777/e-library/actions/workflows/ci.yml/badge.svg)
 
 ## Screenshots
 
