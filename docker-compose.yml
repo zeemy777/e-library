@@ -1,0 +1,43 @@
+# One-command demo: MySQL + the Flask app serving the built React frontend.
+#   docker compose up --build
+# Then open http://localhost:5000
+#
+# The defaults below are for local demonstration only. Override them with
+# environment variables or a root .env file for anything real.
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-e_library}
+      MYSQL_USER: ${DB_USER:-elibrary_app}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-elibrary_dev_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_dev_password}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-e_library}
+      DB_USER: ${DB_USER:-elibrary_app}
+      DB_PASSWORD: ${DB_PASSWORD:-elibrary_dev_password}
+      APP_SECRET_KEY: ${APP_SECRET_KEY:-dev-only-change-me}
+    ports:
+      - "5000:5000"
+
+volumes:
+  db_data:

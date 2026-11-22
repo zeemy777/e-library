@@ -1,0 +1,36 @@
+# Python environment
+.venv/
+.venv-1/
+venv/
+
+# Private configuration
+backend/.env
+.env
+*.env
+!.env.example
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+
+# Generated library media
+# Book PDFs and videos are rebuilt with `npm run assets`.
+# Covers are small and committed so the catalogue renders on a fresh clone.
+backend/uploads/books/
+backend/uploads/videos/
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

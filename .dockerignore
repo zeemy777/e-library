@@ -1,0 +1,22 @@
+# Version control / CI
+.git
+.github
+
+# Local Python environments and caches
+.venv
+.venv-1
+**/__pycache__
+**/*.pyc
+
+# Local secrets — never bake into the image
+backend/.env
+
+# Frontend is rebuilt inside the image; ignore local artefacts
+frontend/node_modules
+frontend/dist
+node_modules
+
+# Editor / launcher noise
+.vscode
+Start E-Library.vbs
+Stop E-Library.bat

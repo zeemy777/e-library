@@ -1,0 +1,228 @@
+# Populate the library with the real catalogue and its book files.
+#
+# Run after tools/build_library_assets.py:
+#   ../.venv/Scripts/python.exe seed_library.py
+#
+# The script is safe to run more than once. It upgrades the original
+# seven demo rows in place and adds anything that is still missing.
+
+from pathlib import Path
+
+from werkzeug.security import generate_password_hash
+
+from config import Config
+from extensions import db
+from library_catalogue import BOOKS, CATEGORIES, VIDEOS
+from models import BookType, Category, Resource, User
+from run import create_app
+
+app = create_app()
+
+UPLOAD_DIR = Path(Config.UPLOAD_FOLDER)
+
+# The original demo rows keep their ids (and any saved favourites),
+# but now point at real, openly licensed editions.
+LEGACY_TITLES = {
+    "Clean Code": "think-python-2e",
+    "Python Crash Course": "think-stats-2e",
+    "A Brief History of Time": "origin-of-species",
+    "The Lean Startup": "wealth-of-nations",
+    "Things Fall Apart": "pride-and-prejudice",
+    "Getting Started with Web Development": "python-for-beginners",
+    "Introduction to Science": "crash-course-biology"
+}
+
+
+def file_exists(relative_path):
+    return (UPLOAD_DIR / relative_path).is_file()
+
+
+def seed_users():
+    default_types = [
+        ("book", "A readable or downloadable book."),
+        ("video", "A video tutorial resource.")
+    ]
+
+    for name, description in default_types:
+        if not BookType.query.filter_by(name=name).first():
+            db.session.add(
+                BookType(name=name, description=description)
+            )
+
+    admin = User.query.filter_by(email="admin@elibrary.com").first()
+
+    if not admin:
+        db.session.add(
+            User(
+                full_name="Library Admin",
+                email="admin@elibrary.com",
+                password_hash=generate_password_hash("Admin@12345"),
+                role="admin"
+            )
+        )
+
+    member = User.query.filter_by(email="member@elibrary.com").first()
+
+    if not member:
+        db.session.add(
+            User(
+                full_name="Demo Member",
+                email="member@elibrary.com",
+                password_hash=generate_password_hash("Member@12345"),
+                role="member"
+            )
+        )
+
+
+def seed_categories():
+    categories = {}
+
+    for item in CATEGORIES:
+        category = Category.query.filter_by(name=item["name"]).first()
+
+        if not category:
+            category = Category(name=item["name"])
+            db.session.add(category)
+
+        category.description = item["description"]
+        category.allow_download = item["allow_download"]
+        categories[item["name"]] = category
+
+    db.session.flush()
+    return categories
+
+
+def apply_book(resource, book, categories):
+    resource.title = book["title"]
+    resource.resource_type = "book"
+    resource.category = categories[book["category"]]
+    resource.author = book["author"]
+    resource.publisher = book["publisher"]
+    resource.description = book["description"]
+    resource.download_override = None
+    resource.is_published = True
+    resource.video_url = None
+
+    pdf_path = f"books/{book['slug']}.pdf"
+    resource.file_path = pdf_path if file_exists(pdf_path) else None
+
+    cover_path = f"covers/{book['slug']}.jpg"
+    resource.cover_image = cover_path if file_exists(cover_path) else None
+
+
+def apply_video(resource, video, categories):
+    resource.title = video["title"]
+    resource.resource_type = "video"
+    resource.category = categories[video["category"]]
+    resource.author = video["author"]
+    resource.publisher = video["publisher"]
+    resource.description = video["description"]
+    resource.download_override = None
+    resource.is_published = True
+    resource.file_path = None
+
+    video_url = video["video_url"]
+    if video_url.startswith("videos/"):
+        resource.video_url = video_url if file_exists(video_url) else None
+    else:
+        resource.video_url = video_url
+
+    cover_path = f"covers/{video['slug']}.jpg"
+    resource.cover_image = cover_path if file_exists(cover_path) else None
+
+
+def main():
+    with app.app_context():
+        db.create_all()
+        seed_users()
+        categories = seed_categories()
+
+        catalogue = {
+            item["slug"]: ("book", item)
+            for item in BOOKS
+        }
+        catalogue.update({
+            item["slug"]: ("video", item)
+            for item in VIDEOS
+        })
+
+        # Rename the original sample rows so their ids stay intact.
+        for legacy_title, slug in LEGACY_TITLES.items():
+            resource = Resource.query.filter_by(title=legacy_title).first()
+
+            if not resource:
+                continue
+
+            kind, item = catalogue[slug]
+
+            if kind == "book":
+                apply_book(resource, item, categories)
+            else:
+                apply_video(resource, item, categories)
+
+        db.session.flush()
+
+        added = 0
+        updated = 0
+
+        for kind, item in catalogue.values():
+            resource = Resource.query.filter_by(
+                title=item["title"]
+            ).first()
+
+            if not resource:
+                resource = Resource(
+                    title=item["title"],
+                    resource_type=kind,
+                    category=categories[item["category"]],
+                    is_published=True
+                )
+                db.session.add(resource)
+                added += 1
+            else:
+                updated += 1
+
+            if kind == "book":
+                apply_book(resource, item, categories)
+            else:
+                apply_video(resource, item, categories)
+
+        db.session.commit()
+
+        total = Resource.query.filter_by(is_published=True).count()
+        books = Resource.query.filter_by(
+            resource_type="book",
+            is_published=True
+        ).count()
+        videos = Resource.query.filter_by(
+            resource_type="video",
+            is_published=True
+        ).count()
+
+        missing_files = [
+            resource.title
+            for resource in Resource.query.filter_by(
+                resource_type="book",
+                is_published=True
+            ).all()
+            if not resource.file_path
+            or not file_exists(resource.file_path)
+        ]
+
+        print(
+            f"Catalogue ready: {total} published resources "
+            f"({books} books, {videos} videos) across "
+            f"{Category.query.count()} categories."
+        )
+        print(f"Added {added} new rows and refreshed {updated} existing rows.")
+
+        if missing_files:
+            print("Books without a file on disk:")
+            for title in missing_files:
+                print(f"  - {title}")
+        else:
+            print("Every book has a readable PDF on disk.")
+
+
+if __name__ == "__main__":
+    main()
