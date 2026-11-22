@@ -15,6 +15,9 @@ backend, so the entire site runs from a single server.
 
 ## Screenshots
 
+The landing page sits on a real library photograph, and the cream-and-umber
+palette used across both light and dark themes is sampled from it.
+
 | Landing page | Catalogue |
 | --- | --- |
 | ![Home](docs/screenshots/01-home.png) | ![Catalogue](docs/screenshots/02-catalogue.png) |
@@ -46,8 +49,9 @@ backend, so the entire site runs from a single server.
 - **Admin dashboard** — manage resources, categories, book types, users and
   roles, loans and contact messages, plus category reports.
 - **Contact form** — messages land in the admin inbox.
-- **Polished UI** — responsive navbar (hamburger drawer + member dropdown on
-  small screens) and a light/dark theme toggle.
+- **Polished UI** — warm library palette sampled from the hero photograph,
+  responsive navbar (hamburger drawer + member dropdown on small screens) and a
+  light/dark theme toggle.
 
 ## Tech stack
 
@@ -253,9 +257,9 @@ E-Library/
 │  │  ├─ App.jsx              # Shell, responsive navbar, paging, view switching
 │  │  ├─ pages/               # Login, Register, Shelf, Loans, Account, Admin, Contact
 │  │  ├─ components/          # ResourceCard, ResourceModal, ThemeToggle, …
-│  │  ├─ hooks/useMotionEffects.js  # Scroll, tilt, ripple interactions
+│  │  ├─ hooks/               # Scroll, tilt, ripple interactions
 │  │  ├─ services/api.js      # Same-origin fetch wrapper (session cookies)
-│  │  └─ hooks/
+│  │  └─ assets/library-hero.jpg  # Home hero background
 │  ├─ public/favicon.svg
 │  ├─ index.html
 │  ├─ vite.config.js          # Dev proxy /api → :5000

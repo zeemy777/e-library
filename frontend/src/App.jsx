@@ -16,6 +16,7 @@ import ThemeToggle from './components/ThemeToggle';
 import useReveal from './hooks/useReveal';
 import useMotionEffects from './hooks/useMotionEffects';
 import { apiRequest } from './services/api';
+import libraryPhoto from './assets/library-hero.jpg';
 
 // Small floating confirmation used for favourite and session actions.
 function Toast({ toast }) {
@@ -655,7 +656,7 @@ function App() {
   }
 
   return (
-    <div className="app">
+    <div className={currentPage === 'home' ? 'app app-home' : 'app'}>
 
       {/* Navigation bar */}
       <header
@@ -849,7 +850,11 @@ function App() {
       <main>
 
         {/* Homepage hero */}
-        <section className="hero" id="home">
+        <section
+          className="hero hero-photo"
+          id="home"
+          style={{ '--hero-photo': `url(${libraryPhoto})` }}
+        >
 
           <span className="hero-orb orb-one" aria-hidden="true" />
           <span className="hero-orb orb-two" aria-hidden="true" />
