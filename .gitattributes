@@ -1,0 +1,12 @@
+# Normalise text files to LF; keep Windows launchers CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.vbs text eol=crlf
+*.sh text eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.mp4 binary
