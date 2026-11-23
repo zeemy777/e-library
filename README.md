@@ -371,6 +371,10 @@ point at valid sources. The current catalogue of 61 books + 25 videos passes
 with **0 problems** — this catches the classic "cover says one book, PDF contains
 another" mistake.
 
+The demo covers, book PDFs and local videos are committed so a container built
+straight from GitHub is fully readable. New files uploaded through the admin UI
+stay git-ignored.
+
 ## Security notes
 
 - Keep `backend/.env` out of version control and out of the Docker image.
