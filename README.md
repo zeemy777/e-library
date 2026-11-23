@@ -114,6 +114,38 @@ APP_SECRET_KEY="$(openssl rand -hex 32)" \
 docker compose up --build
 ```
 
+## Deploy a live demo (Railway)
+
+The repo ships a `railway.toml`, the entrypoint honours the platform's `PORT`,
+and the seed step retries until a separately provisioned MySQL is reachable.
+
+1. On [Railway](https://railway.com) create a project and choose
+   **Deploy from GitHub repo → `zeemy777/e-library`**.
+2. In the same project add **New → Database → MySQL**.
+3. On the app service add these variables (Railway resolves the references):
+
+   | Variable         | Value                      |
+   | ---------------- | -------------------------- |
+   | `DB_HOST`        | `${{MySQL.MYSQLHOST}}`     |
+   | `DB_PORT`        | `${{MySQL.MYSQLPORT}}`     |
+   | `DB_NAME`        | `${{MySQL.MYSQLDATABASE}}` |
+   | `DB_USER`        | `${{MySQL.MYSQLUSER}}`     |
+   | `DB_PASSWORD`    | `${{MySQL.MYSQLPASSWORD}}` |
+   | `APP_SECRET_KEY` | long random hex            |
+
+4. Under **Settings → Networking** generate a public domain and open it. The
+   first boot seeds the catalogue, so the demo accounts above work immediately.
+
+Book files are baked into the image, so nothing else is needed for a demo.
+Runtime uploads live inside the container and reset on redeploy; mount a volume
+at `/app/backend/uploads` only if you need them to persist — an empty volume
+hides the bundled demo files until `tools/build_library_assets.py` and
+`seed_library.py` are run again.
+
+Render works the same way (Docker web service plus an external MySQL such as
+Aiven); Railway can host app and database in one project, so it needs fewer
+steps.
+
 ## Quick start — Windows one-click
 
 If you already have a `.venv` and a built frontend, double-click
@@ -199,14 +231,15 @@ Backend configuration comes from `backend/.env` (see `backend/.env.example`).
 Real process environment variables take precedence over the file, which is how
 the Docker Compose values are injected.
 
-| Variable         | Purpose                              | Example                |
-| ---------------- | ------------------------------------ | ---------------------- |
-| `DB_HOST`        | MySQL host                           | `localhost`            |
-| `DB_PORT`        | MySQL port                           | `3306`                 |
-| `DB_NAME`        | Database name                        | `e_library`            |
-| `DB_USER`        | Database user                        | `elibrary_app`         |
-| `DB_PASSWORD`    | Database password                    | `change-me`            |
-| `APP_SECRET_KEY` | Flask session signing key            | long random hex string |
+| Variable         | Purpose                                  | Example                |
+| ---------------- | ---------------------------------------- | ---------------------- |
+| `DB_HOST`        | MySQL host                               | `localhost`            |
+| `DB_PORT`        | MySQL port                               | `3306`                 |
+| `DB_NAME`        | Database name                            | `e_library`            |
+| `DB_USER`        | Database user                            | `elibrary_app`         |
+| `DB_PASSWORD`    | Database password                        | `change-me`            |
+| `APP_SECRET_KEY` | Flask session signing key                | long random hex string |
+| `PORT`           | HTTP port inside the container (Docker)  | `5000` (hosts override) |
 
 Generate a secret key with `python -c "import secrets; print(secrets.token_hex(32))"`.
 
@@ -267,7 +300,8 @@ E-Library/
 ├─ docs/screenshots/          # README screenshots
 ├─ Dockerfile                 # Multi-stage: Node build → Python + Gunicorn
 ├─ docker-compose.yml         # MySQL 8.4 + app, healthcheck, named volume
-├─ docker-entrypoint.sh       # Seed then serve
+├─ docker-entrypoint.sh       # Wait for DB, seed, then serve on $PORT
+├─ railway.toml               # Railway: Dockerfile build + /api/health check
 ├─ .dockerignore
 ├─ .github/workflows/ci.yml
 ├─ package.json               # Root scripts: start, dev, seed, audit, test, build

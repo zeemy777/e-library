@@ -1,0 +1,12 @@
+# Railway builds this repo with the same multi-stage Dockerfile used locally.
+# Add a MySQL database service to the same project and map its MYSQL* variables
+# to DB_* on this service (see "Deploy a live demo" in the README).
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 180
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
