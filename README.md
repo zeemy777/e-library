@@ -1,6 +1,6 @@
 # E-Library
 
-**A full-stack digital library** — browse 86 books and video tutorials, borrow
+**A full-stack digital library** — browse 622 books and video tutorials, borrow
 titles, rate and review them, keep a personal shelf, and manage the whole
 catalogue from an admin dashboard. The React frontend is served by the Flask
 backend, so the entire site runs from a single server.
@@ -32,12 +32,15 @@ palette used across both light and dark themes is sampled from it.
 
 ## Features
 
-- **Catalogue** — 61 public-domain books and 25 curated video tutorials across 7
-  categories, with search, type/category filters, live stats and paged loading
+- **Catalogue** — 3,597 public-domain books (61 with local PDFs, 300 streamed
+  from Project Gutenberg, 236 fantasy classics and 3,000 subject-scan entries)
+  and 25 curated video tutorials across 8 categories,
+  with search, type/category filters, live stats and paged loading
   ("Show more" / "Show all") so the first paint stays fast.
 - **Motion & polish** — scroll progress, hero spotlight, word-by-word headline
-  reveal, 3D card tilt with glare, ripples, staggered filters, page transitions,
-  full light/dark themes and `prefers-reduced-motion` support.
+  reveal, a floating fan of real book covers, an animated new-arrivals shelf,
+  3D card tilt with glare, ripples, staggered filters, page transitions, full
+  light/dark themes and `prefers-reduced-motion` support.
 - **Borrowing** — 14-day loans, a limit of 5 active loans per member, overdue
   tracking, one-click returns and a full loan history (*My Loans*).
 - **Ratings & reviews** — 1–5 star reviews, one per member per resource, editable
@@ -61,8 +64,8 @@ palette used across both light and dark themes is sampled from it.
 | Backend   | Flask 3, Flask-SQLAlchemy, SQLAlchemy 2, PyMySQL                     |
 | Database  | MySQL 8.x (SQLite for tests)                                       |
 | Auth      | Server-side session cookies (roles: `member`, `admin`)             |
-| Content   | Project Gutenberg PDFs, YouTube tutorials, pypdf content audit     |
-| Testing   | pytest + Flask test client (22 API tests)                          |
+| Content   | Gutenberg PDFs + public-domain scans from Open Library / Internet Archive, YouTube tutorials, pypdf audit |
+| Testing   | pytest + Flask test client (25 API + 4 rules + 1 schema test)      |
 | Packaging | Multi-stage Docker build, Docker Compose, Gunicorn                 |
 | CI        | GitHub Actions (frontend lint + build, backend pytest)             |
 
@@ -142,9 +145,64 @@ at `/app/backend/uploads` only if you need them to persist — an empty volume
 hides the bundled demo files until `tools/build_library_assets.py` and
 `seed_library.py` are run again.
 
-Render works the same way (Docker web service plus an external MySQL such as
-Aiven); Railway can host app and database in one project, so it needs fewer
-steps.
+## Deploy the backend to Render (Blueprint)
+
+`render.yaml` defines both resources needed by the API: a private MySQL 8
+service with a 10 GB disk and a Docker web service. The web service retries the
+idempotent seed until MySQL accepts connections, then serves the API and health
+check at `/api/health`.
+
+1. Push this repo to GitHub, then in Render choose **New → Blueprint** and
+   select `zeemy777/e-library`.
+2. During Blueprint sync, enter a strong value for `MYSQL_PASSWORD` and set
+   `CORS_ORIGINS` to your future Vercel URL, for example
+   `https://e-library.vercel.app`. Render generates `APP_SECRET_KEY` and the
+   MySQL root password automatically.
+3. Wait for `e-library-mysql` and `e-library-api` to become live. Copy the public
+   URL of `e-library-api`, for example `https://e-library-api.onrender.com`.
+4. If you did not set `CORS_ORIGINS` during sync, add it now on the
+   `e-library-api` service. It must be the exact Vercel origin, with no trailing
+   slash.
+
+The private MySQL service and its persistent disk are paid Render resources;
+the web service uses a small paid plan so the 3,600-row catalogue seeds
+reliably. Runtime uploads are not persisted across redeploys unless you attach a
+disk to `/app/backend/uploads`; the bundled demo files remain in the image.
+
+## Deploy the frontend to Vercel
+
+The Flask API and MySQL run on Render (or Railway); Vercel serves only the React
+build. `vercel.json` already sets the Vite build command, output folder and SPA
+fallback.
+
+1. Deploy the Render Blueprint above and copy the public URL of `e-library-api`.
+   Vercel builds the frontend with the Node version required by Vite 8
+   (20.19+ / 22.12+).
+2. On the Render `e-library-api` service confirm:
+
+   | Variable                 | Value                                  |
+   | ------------------------ | -------------------------------------- |
+   | `CORS_ORIGINS`           | `https://your-app.vercel.app`          |
+   | `SESSION_COOKIE_SECURE`  | `true`                                 |
+   | `SESSION_COOKIE_SAMESITE`| `None`                                 |
+
+   `None` is needed whenever the frontend and API are on different origins,
+   which is the normal Vercel setup.
+3. Import the GitHub repo into Vercel. Keep the repository root as the project
+   root — `vercel.json` points Vercel at `frontend/dist`.
+4. Add the frontend environment variable and redeploy:
+
+   | Variable              | Value                                         |
+   | --------------------- | --------------------------------------------- |
+   | `VITE_API_BASE_URL`   | `https://e-library-api.onrender.com`          |
+
+   Do not append `/api`; the frontend adds that path itself.
+5. Open the Vercel URL and sign in with `member@elibrary.com` /
+   `Member@12345` or `admin@elibrary.com` / `Admin@12345`.
+
+Book covers are served by the Flask API at `/api/media/...`, so the backend must
+stay online for images, uploads and login. The committed JSON catalogues mean
+the backend can seed without network access.
 
 ## Quick start — Windows one-click
 
@@ -239,7 +297,11 @@ the Docker Compose values are injected.
 | `DB_USER`        | Database user                            | `elibrary_app`         |
 | `DB_PASSWORD`    | Database password                        | `change-me`            |
 | `APP_SECRET_KEY` | Flask session signing key                | long random hex string |
+| `CORS_ORIGINS`   | Exact frontend origins allowed to call the API | local Vite URLs   |
+| `SESSION_COOKIE_SECURE` | Send login cookies only over HTTPS | `false`         |
+| `SESSION_COOKIE_SAMESITE` | Cross-site cookie policy        | `Lax`           |
 | `PORT`           | HTTP port inside the container (Docker)  | `5000` (hosts override) |
+| `VITE_API_BASE_URL` | Public Flask API URL for the Vercel build | same origin (empty) |
 
 Generate a secret key with `python -c "import secrets; print(secrets.token_hex(32))"`.
 
@@ -273,14 +335,28 @@ E-Library/
 │  ├─ favorites.py            # /api/favorites — personal shelf
 │  ├─ admin.py                # /api/admin — management + reports
 │  ├─ contact.py              # /api/contact
-│  ├─ library_catalogue.py    # Book/video catalogue data (61 + 25)
+│  ├─ library_catalogue.py    # Local book/video catalogue data (61 + 25)
+│  ├─ catalogue/
+│  │  ├─ remote_books.json    # 300 streamed Gutenberg books (generated)
+│  │  ├─ fantasy_books.json   # 236 public-domain fantasy scan entries
+│  │  └─ subject_books.json   # Six shelves of public-domain scans (generated)
+│  ├─ external_links.py       # Allowlist for streamed book URLs
 │  ├─ seed_library.py         # Idempotent schema + demo seed
+│  ├─ schema.py               # Add new columns to existing databases
 │  ├─ init_db.py              # Schema-only bootstrap
 │  ├─ test_db.py              # MySQL connectivity check
-│  ├─ tests/                  # pytest suite (SQLite, 22 API tests)
+│  ├─ tests/                  # pytest suite (SQLite, 30 tests)
 │  ├─ tools/
-│  │  ├─ build_library_assets.py  # Fetch covers, download/convert PDFs
-│  │  └─ audit_library.py         # Verify PDFs match titles, covers exist
+│  │  ├─ build_library_assets.py   # Fetch covers, download/convert PDFs
+│  │  ├─ build_remote_catalogue.py # Generate Gutenberg metadata JSON
+│  │  ├─ build_fantasy_catalogue.py # Build fantasy shelf from public scans
+│  │  ├─ build_subject_catalogue.py # Expand the six subject shelves
+│  │  ├─ fetch_public_domain_covers.py # Add real scan covers where available
+│  │  ├─ reclassify_remote_catalogue.py # Refresh categories offline
+│  │  ├─ category_rules.py         # Shared book categorisation rules
+│  │  ├─ remote_covers.py          # Typographic SVG covers for streamed books
+│  │  ├─ build_remote_covers.py    # Add covers to an existing JSON catalogue
+│  │  └─ audit_library.py          # Verify PDFs match titles, covers exist
 │  ├─ requirements.txt
 │  ├─ requirements-dev.txt    # pytest + pypdf
 │  ├─ .env.example
@@ -289,19 +365,22 @@ E-Library/
 │  ├─ src/
 │  │  ├─ App.jsx              # Shell, responsive navbar, paging, view switching
 │  │  ├─ pages/               # Login, Register, Shelf, Loans, Account, Admin, Contact
-│  │  ├─ components/          # ResourceCard, ResourceModal, ThemeToggle, …
+│  │  ├─ components/          # ResourceCard, ResourceModal, HeroStack, FeaturedShelf, …
 │  │  ├─ hooks/               # Scroll, tilt, ripple interactions
-│  │  ├─ services/api.js      # Same-origin fetch wrapper (session cookies)
+│  │  ├─ services/api.js      # Fetch wrapper (VITE_API_BASE_URL for Vercel)
 │  │  └─ assets/library-hero.jpg  # Home hero background
 │  ├─ public/favicon.svg
 │  ├─ index.html
 │  ├─ vite.config.js          # Dev proxy /api → :5000
-│  └─ package.json
+│  ├─ package.json
+│  └─ .env.example            # VITE_API_BASE_URL placeholder for Vercel
 ├─ docs/screenshots/          # README screenshots
 ├─ Dockerfile                 # Multi-stage: Node build → Python + Gunicorn
 ├─ docker-compose.yml         # MySQL 8.4 + app, healthcheck, named volume
 ├─ docker-entrypoint.sh       # Wait for DB, seed, then serve on $PORT
 ├─ railway.toml               # Railway: Dockerfile build + /api/health check
+├─ render.yaml                # Render: Flask API + private MySQL Blueprint
+├─ vercel.json                # Vercel: Vite build + SPA fallback
 ├─ .dockerignore
 ├─ .github/workflows/ci.yml
 ├─ package.json               # Root scripts: start, dev, seed, audit, test, build
@@ -347,16 +426,22 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Or from the repository root: `npm test`. Expected: **22 passed**.
+Or from the repository root: `npm test`. Expected: **30 passed**.
 
 ## Content pipeline & quality
 
 The demo catalogue is real, openly licensed content rather than filler rows:
 
 ```bash
-npm run assets   # fetch covers, download public-domain PDFs, typeset text books
-npm run seed     # upsert categories, catalogue rows and demo accounts
-npm run audit    # verify every file actually matches its title
+npm run assets               # fetch covers, download public-domain PDFs, typeset books
+npm run catalogue:remote     # refresh the 300 Gutenberg metadata entries
+npm run catalogue:fantasy    # refresh the 236 public-domain fantasy scan entries
+npm run catalogue:subjects   # expand the six subject shelves from public scans
+# cd backend && python tools/build_subject_catalogue.py --covers-only  # resume covers
+npm run catalogue:reclassify # tidy categories in the committed JSON, offline
+npm run covers:public-domain # replace SVG covers with real scans where available
+npm run seed                 # upsert categories, catalogue rows and demo accounts
+npm run audit                # verify every local file actually matches its title
 ```
 
 `tools/build_library_assets.py` downloads Project Gutenberg titles, renders
@@ -364,12 +449,40 @@ public-domain texts to PDF with headless Chrome, and pairs each book with cover
 art and curated YouTube tutorials (`img.youtube.com` thumbnails). Re-runs are
 cheap: existing files are skipped.
 
-`tools/audit_library.py` opens every PDF with pypdf, checks the PDF header and
-trailer, requires at least five pages, and confirms the title, author and body
-text match the catalogue entry. It also verifies covers exist and that videos
-point at valid sources. The current catalogue of 61 books + 25 videos passes
-with **0 problems** — this catches the classic "cover says one book, PDF contains
-another" mistake.
+`tools/build_remote_catalogue.py` queries Gutendex for public-domain English
+books with real summaries and writes `backend/catalogue/remote_books.json`.
+`tools/build_fantasy_catalogue.py` uses Open Library's public-scan flag to build
+`backend/catalogue/fantasy_books.json`: only English works first published by
+1929 with an Internet Archive scan are accepted, and reading links point at
+those HTTPS archive pages. No modern copyrighted fantasy is copied — instead
+the shelf collects public-domain fairy tales, myths, magical romances and
+imagined worlds. `tools/build_subject_catalogue.py` uses the same public-scan
+filter to expand Business, History, Literature, Mathematics, Science and
+Technology, capped at 500 new works per shelf and de-duplicated against the
+existing catalogues. The generated JSON is committed, so seeding works offline.
+
+Categories are assigned by `tools/category_rules.py`, which weights titles over
+summaries, keeps science fiction in Literature, and moves goblins, enchanted
+castles and fairy tales into the new **Fantasy** shelf.
+`tools/reclassify_remote_catalogue.py` applies the same rules to the committed
+JSON without any network calls.
+
+`tools/remote_covers.py` still creates small SVG covers as a fallback, and
+`tools/fetch_public_domain_covers.py` replaces them with real scanned cover art
+where Open Library or the Internet Archive has an eligible public-domain scan.
+Today **245 of the 300 Gutenberg books**, **235 of the 236 fantasy books** and
+**1,481 of the 3,000 subject books** use real scans; the rest keep the
+typographic fallback. Streamed rows never store a
+PDF, cannot be borrowed and open at their source through a 302 redirect; the 61
+local books remain fully readable, downloadable and borrowable offline.
+
+`tools/audit_library.py` opens every local PDF with pypdf, checks the PDF header
+and trailer, requires at least five pages, and confirms the title, author and
+body text match the catalogue entry. Streamed books are checked for an allowed
+HTTPS reading link and the absence of a stray local PDF. It also verifies
+covers exist and that videos point at valid sources. The full catalogue of 3,622
+resources passes with **0 problems** — this catches the classic "cover says one
+book, PDF contains another" mistake.
 
 The demo covers, book PDFs and local videos are committed so a container built
 straight from GitHub is fully readable. New files uploaded through the admin UI

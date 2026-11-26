@@ -10,12 +10,12 @@ PORT="${PORT:-5000}"
 # the idempotent seed until the database accepts connections.
 attempt=1
 until python seed_library.py; do
-  if [ "$attempt" -ge 15 ]; then
+  if [ "$attempt" -ge 60 ]; then
     echo "Database not reachable after $attempt attempts" >&2
     exit 1
   fi
   attempt=$((attempt + 1))
-  sleep 4
+  sleep 5
 done
 
 exec gunicorn \

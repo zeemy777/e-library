@@ -152,6 +152,15 @@ class Resource(db.Model):
         nullable=False
     )
 
+    # Stable catalogue identity used by the seed script. Unlike the title,
+    # a slug never changes when a book is refreshed or renamed upstream.
+    slug = db.Column(
+        db.String(100),
+        unique=True,
+        nullable=True,
+        index=True
+    )
+
     # Resource type can be book or video.
     resource_type = db.Column(
         db.String(20),
@@ -194,6 +203,13 @@ class Resource(db.Model):
 
     # External or embedded video location.
     video_url = db.Column(
+        db.String(500),
+        nullable=True
+    )
+
+    # Reading link for books that are streamed from an open source
+    # (for example Project Gutenberg) rather than stored locally.
+    external_url = db.Column(
         db.String(500),
         nullable=True
     )

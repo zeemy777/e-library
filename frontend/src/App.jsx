@@ -12,6 +12,8 @@ import LoansPage from './pages/Loans';
 import ResourceModal from './components/ResourceModal';
 import ResourceCard from './components/ResourceCard';
 import AnimatedCounter from './components/AnimatedCounter';
+import HeroStack from './components/HeroStack';
+import FeaturedShelf from './components/FeaturedShelf';
 import ThemeToggle from './components/ThemeToggle';
 import useReveal from './hooks/useReveal';
 import useMotionEffects from './hooks/useMotionEffects';
@@ -351,27 +353,44 @@ function App() {
   }
 
   // Fetch the next batch (or everything left) only when asked.
+  // The API caps each request at 200 rows, so "show all" walks the
+  // remaining pages in batches instead of asking for one huge response.
   async function loadMore(showAll = false) {
     setLoadingMore(true);
 
     try {
-      const limit = showAll
-        ? Math.max(totalResources - resources.length, 1)
-        : PAGE_SIZE;
+      const incoming = [];
+      let offset = resources.length;
+      let total = totalResources;
 
-      const result = await apiRequest(
-        `/api/resources?${catalogueQuery(resources.length, limit)}`
-      );
+      do {
+        const limit = showAll
+          ? Math.min(200, Math.max(total - offset, 1))
+          : PAGE_SIZE;
+
+        const result = await apiRequest(
+          `/api/resources?${catalogueQuery(offset, limit)}`
+        );
+        const batch = result.resources || [];
+
+        incoming.push(...batch);
+        total = result.total ?? total;
+        offset += batch.length;
+
+        if (batch.length === 0) {
+          break;
+        }
+      } while (showAll && offset < total);
 
       setResources((current) => {
         const seen = new Set(current.map((item) => item.id));
         return [
           ...current,
-          ...(result.resources || []).filter((item) => !seen.has(item.id))
+          ...incoming.filter((item) => !seen.has(item.id))
         ];
       });
-      setTotalResources(result.total ?? totalResources);
-      setHasMore(Boolean(result.has_more));
+      setTotalResources(total);
+      setHasMore(offset < total);
 
     } catch (err) {
       showToast(err.message || 'Could not load more resources.');
@@ -390,6 +409,11 @@ function App() {
 
   // Saved resource ids for quick lookup.
   const favoriteIds = new Set(favorites.map((item) => item.id));
+
+  // The newest books drive the hero fan and the featured shelf.
+  const featuredBooks = resources
+    .filter((item) => item.resource_type === 'book')
+    .slice(0, 8);
 
   const hasFilters = Boolean(search.trim() || activeCategory || resourceType);
 
@@ -922,11 +946,15 @@ function App() {
                 YOUR NEXT CHAPTER
               </span>
 
-              <div className="hero-book">
-                <span>READ</span>
-                <strong>LEARN.</strong>
-                <span>GROW.</span>
-              </div>
+              {featuredBooks.length > 0 ? (
+                <HeroStack books={featuredBooks} />
+              ) : (
+                <div className="hero-book" aria-hidden="true">
+                  <span>READ</span>
+                  <strong>LEARN.</strong>
+                  <span>GROW.</span>
+                </div>
+              )}
 
               <p>
                 Knowledge is always within reach.
@@ -988,6 +1016,14 @@ function App() {
           </div>
 
         </section>
+
+        {/* Animated shelf of recently added books */}
+        {!loading && !error && (
+          <FeaturedShelf
+            books={featuredBooks}
+            onOpen={setSelectedResource}
+          />
+        )}
 
         {/* Categories */}
         <section className="section" id="categories">

@@ -1,48 +1,53 @@
 
 import { useEffect, useRef, useState } from "react";
 
+function prefersReducedMotion() {
+  return typeof window !== "undefined"
+    && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
 // Counts up from zero the first time it becomes visible.
 function AnimatedCounter({ value, duration = 1100 }) {
 
-  const [display, setDisplay] = useState(0);
+  const [animated, setAnimated] = useState(0);
   const ref = useRef(null);
+  const frameRef = useRef(0);
+  const startRef = useRef(0);
+  const reduceMotion = prefersReducedMotion();
 
   useEffect(() => {
 
     const element = ref.current;
 
-    if (!element) {
+    if (!element || reduceMotion) {
       return undefined;
     }
 
-    let frame = 0;
-    let start = 0;
-
     function step(timestamp) {
 
-      if (!start) {
-        start = timestamp;
+      if (!startRef.current) {
+        startRef.current = timestamp;
       }
 
       const progress = Math.min(
-        (timestamp - start) / duration,
+        (timestamp - startRef.current) / duration,
         1
       );
 
       // Ease-out so the number settles gently.
       const eased = 1 - Math.pow(1 - progress, 3);
 
-      setDisplay(Math.round(value * eased));
+      setAnimated(Math.round(value * eased));
 
       if (progress < 1) {
-        frame = requestAnimationFrame(step);
+        frameRef.current = requestAnimationFrame(step);
       }
     }
 
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          frame = requestAnimationFrame(step);
+          frameRef.current = requestAnimationFrame(step);
           observer.disconnect();
         }
       },
@@ -53,11 +58,12 @@ function AnimatedCounter({ value, duration = 1100 }) {
 
     return () => {
       observer.disconnect();
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(frameRef.current);
     };
-  }, [value, duration]);
+  }, [value, duration, reduceMotion]);
 
-  return <span ref={ref}>{display}</span>;
+  // Show the final value immediately when the visitor asks for less motion.
+  return <span ref={ref}>{reduceMotion ? value : animated}</span>;
 }
 
 export default AnimatedCounter;

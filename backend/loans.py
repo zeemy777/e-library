@@ -131,11 +131,18 @@ def borrow_book():
             "message": "Book not found."
         }), 404
 
-    # Only physical-style books can be borrowed.
+    # Only local books can be borrowed. Streamed books are read at their
+    # source and have no file to return.
     if resource.resource_type != "book":
         return jsonify({
             "status": "error",
             "message": "Only books can be borrowed."
+        }), 400
+
+    if resource.external_url:
+        return jsonify({
+            "status": "error",
+            "message": "This book is read online and cannot be borrowed."
         }), 400
 
     # The member must not already have this book out.

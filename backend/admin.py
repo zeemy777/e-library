@@ -19,7 +19,13 @@ from sqlalchemy import or_
 # Import application models and helpers.
 from auth import get_logged_in_user, user_response
 from config import Config
-from library import can_download, resolve_file, resource_response
+from external_links import is_allowed_external_url
+from library import (
+    can_download,
+    ratings_for,
+    resolve_file,
+    resource_response
+)
 from loans import loan_response
 from models import (
     BookType,
@@ -155,9 +161,9 @@ def normalize_type_name(value):
 
 
 # Add admin-only fields to the public resource serializer.
-def admin_resource_response(resource):
+def admin_resource_response(resource, ratings=None):
 
-    data = resource_response(resource)
+    data = resource_response(resource, ratings)
     data["download_override"] = resource.download_override
     return data
 
@@ -577,11 +583,12 @@ def list_resources():
     resources = query.order_by(
         Resource.created_at.desc()
     ).all()
+    ratings = ratings_for(resources)
 
     return jsonify({
         "status": "success",
         "resources": [
-            admin_resource_response(resource)
+            admin_resource_response(resource, ratings)
             for resource in resources
         ]
     }), 200
@@ -610,6 +617,13 @@ def apply_resource_form(resource, form, files):
 
     if not category:
         raise ValueError("Choose a valid category.")
+
+    external_url = form.get("external_url", "").strip() or None
+
+    if external_url and not is_allowed_external_url(external_url):
+        raise ValueError(
+            "External read links must use HTTPS from an approved public-domain source."
+        )
 
     # Save new uploads before touching the database record.
     new_files = {}
@@ -650,6 +664,7 @@ def apply_resource_form(resource, form, files):
     resource.video_url = (
         form.get("video_url", "").strip() or None
     )
+    resource.external_url = external_url
 
     if "download_override" in form:
         resource.download_override = parse_override(

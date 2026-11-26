@@ -60,7 +60,7 @@ def app(tmp_path, monkeypatch):
         )
         db.session.add_all([tech, lit, locked])
         db.session.add_all([
-            BookType(name="Book"), BookType(name="Video")
+            BookType(name="book"), BookType(name="video")
         ])
         db.session.flush()
 

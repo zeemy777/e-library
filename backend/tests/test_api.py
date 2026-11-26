@@ -290,6 +290,75 @@ def test_read_and_download_permissions(member):
     ).status_code == 403
 
 
+def test_remote_book_reads_at_its_source(app, member):
+    source = "https://www.gutenberg.org/ebooks/1342.html.images"
+
+    with app.app_context():
+        category = Category.query.filter_by(name="Technology").first()
+        db.session.add(Resource(
+            title="Remote Classic",
+            author="Public Domain",
+            resource_type="book",
+            category=category,
+            external_url=source,
+            cover_image="https://www.gutenberg.org/cover.jpg",
+            slug="gutenberg-1342",
+            is_published=True
+        ))
+        db.session.commit()
+
+    listing = member.get(
+        "/api/resources?search=Remote Classic"
+    ).get_json()
+    remote = listing["resources"][0]
+
+    assert remote["is_remote"] is True
+    assert remote["readable"] is True
+    assert remote["can_borrow"] is False
+    assert remote["can_download"] is False
+    assert remote["external_url"] == source
+
+    opened = member.get(f"/api/resources/{remote['id']}/read")
+    assert opened.status_code == 302
+    assert opened.headers["Location"] == source
+
+    assert member.get(
+        f"/api/resources/{remote['id']}/download"
+    ).status_code == 400
+    assert member.post(
+        "/api/loans",
+        json={"resource_id": remote["id"]}
+    ).status_code == 400
+
+
+def test_public_domain_scan_link_is_allowed(app, member):
+    source = "https://archive.org/details/lilithromance00macd"
+
+    with app.app_context():
+        category = Category.query.filter_by(name="Literature").first()
+        db.session.add(Resource(
+            title="Public Domain Fantasy Scan",
+            author="George MacDonald",
+            resource_type="book",
+            category=category,
+            external_url=source,
+            cover_image="covers/ol-123.jpg",
+            slug="ol-123",
+            is_published=True
+        ))
+        db.session.commit()
+
+    listing = member.get(
+        "/api/resources?search=Public Domain Fantasy Scan"
+    ).get_json()
+    remote = listing["resources"][0]
+
+    assert remote["is_remote"] is True
+    assert member.get(
+        f"/api/resources/{remote['id']}/read"
+    ).headers["Location"] == source
+
+
 # =====================================
 # Contact & admin
 # =====================================
@@ -329,3 +398,18 @@ def test_admin_guard(app):
 
     with app.app_context():
         assert Category.query.filter_by(name="New Topic").first()
+
+
+def test_admin_rejects_untrusted_external_link(app, admin):
+    with app.app_context():
+        category_id = Category.query.first().id
+
+    response = admin.post("/api/admin/resources", data={
+        "title": "Bad Link",
+        "resource_type": "book",
+        "category_id": str(category_id),
+        "external_url": "https://untrusted.example/book"
+    })
+
+    assert response.status_code == 400
+    assert "approved public-domain source" in response.get_json()["message"]

@@ -4,6 +4,7 @@ from pathlib import Path
 from flask import (
     Blueprint,
     jsonify,
+    redirect,
     request,
     send_file,
     session
@@ -12,6 +13,7 @@ from flask import (
 from sqlalchemy import func, or_
 
 from config import Config
+from external_links import is_allowed_external_url
 from extensions import db
 from models import Category, Resource, Review
 
@@ -55,21 +57,58 @@ def resolve_file(resource):
     return file_path
 
 
-# Shared serializer so every endpoint exposes the same fields.
-def resource_response(resource):
+# A book is streamed from an open source instead of a local PDF when it has
+# an external reading link. Those rows deliberately have no file_path.
+def is_remote(resource):
+    return bool(resource.external_url)
 
-    file_path = resolve_file(resource)
 
-    rating_row = db.session.query(
+# Fetch ratings for a whole page in one query instead of one query per card.
+def ratings_for(resources):
+    ids = [resource.id for resource in resources if resource.id]
+
+    if not ids:
+        return {}
+
+    rows = db.session.query(
+        Review.resource_id,
         func.avg(Review.rating),
         func.count(Review.id)
     ).filter(
-        Review.resource_id == resource.id
-    ).first()
+        Review.resource_id.in_(ids)
+    ).group_by(
+        Review.resource_id
+    ).all()
 
-    average_rating = (
-        round(rating_row[0], 1) if rating_row[0] else None
-    )
+    return {
+        resource_id: (
+            round(average, 1) if average else None,
+            count or 0
+        )
+        for resource_id, average, count in rows
+    }
+
+
+# Shared serializer so every endpoint exposes the same fields.
+def resource_response(resource, ratings=None):
+
+    file_path = resolve_file(resource)
+    remote = is_remote(resource)
+    rating = ratings.get(resource.id) if ratings is not None else None
+
+    if rating is None:
+        rating_row = db.session.query(
+            func.avg(Review.rating),
+            func.count(Review.id)
+        ).filter(
+            Review.resource_id == resource.id
+        ).first()
+        rating = (
+            round(rating_row[0], 1) if rating_row[0] else None,
+            rating_row[1] or 0
+        )
+
+    average_rating, rating_count = rating
 
     return {
         "id": resource.id,
@@ -82,15 +121,21 @@ def resource_response(resource):
         "category": resource.category.name,
         "cover_image": resource.cover_image,
         "video_url": resource.video_url,
+        "external_url": resource.external_url,
+        "is_remote": remote,
         "is_published": resource.is_published,
-        "can_download": can_download(resource),
+        "can_borrow": resource.resource_type == "book" and not remote,
+        "can_download": can_download(resource) and not remote,
         "has_file": file_path is not None,
         "readable": (
-            file_path is not None
-            and file_path.suffix.lower() == ".pdf"
+            remote
+            or (
+                file_path is not None
+                and file_path.suffix.lower() == ".pdf"
+            )
         ),
         "average_rating": average_rating,
-        "rating_count": rating_row[1] or 0,
+        "rating_count": rating_count,
         "created_at": (
             resource.created_at.isoformat()
             if resource.created_at else None
@@ -217,15 +262,14 @@ def get_resources():
 
     total = query.count()
 
-    # Optional paging so the catalogue can load in batches.
-    limit = request.args.get("limit", type=int)
+    # Optional paging so the catalogue can load in batches. A default keeps
+    # an unbounded request from returning the entire collection at once.
+    limit = request.args.get("limit", 100, type=int)
+    limit = min(max(limit, 1), 200)
     offset = max(request.args.get("offset", 0, type=int) or 0, 0)
 
-    if limit is not None:
-        limit = min(max(limit, 1), 200)
-        resources = query.offset(offset).limit(limit).all()
-    else:
-        resources = query.offset(offset).all()
+    resources = query.offset(offset).limit(limit).all()
+    ratings = ratings_for(resources)
 
     return jsonify({
         "status": "success",
@@ -233,7 +277,7 @@ def get_resources():
         "offset": offset,
         "has_more": offset + len(resources) < total,
         "resources": [
-            resource_response(resource)
+            resource_response(resource, ratings)
             for resource in resources
         ]
     }), 200
@@ -298,6 +342,14 @@ def download_resource(resource_id):
             "message": "Only books can be downloaded."
         }), 400
 
+    if is_remote(resource):
+        return jsonify({
+            "status": "error",
+            "message": (
+                "This book is read online at its public-domain source."
+            )
+        }), 400
+
     # Apply the category or per-book download permission.
     if not can_download(resource):
         return jsonify({
@@ -353,6 +405,17 @@ def read_resource(resource_id):
             "status": "error",
             "message": "Only books can be read online."
         }), 400
+
+    # Remote books are opened at their public-domain source. Only approved
+    # hosts are redirected to, even if an admin record was edited by hand.
+    if resource.external_url:
+        if not is_allowed_external_url(resource.external_url):
+            return jsonify({
+                "status": "error",
+                "message": "This book's external link is not available."
+            }), 400
+
+        return redirect(resource.external_url, code=302)
 
     file_path = resolve_file(resource)
 

@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from pathlib import Path
@@ -22,20 +24,37 @@ def create_app(config_object=Config):
     # Load configuration.
     app.config.from_object(config_object)
 
-    # Session settings.
+    # Session settings. A Vercel frontend on a different domain needs
+    # SameSite=None plus Secure cookies so login sessions survive the
+    # cross-origin fetch from the deployed site.
+    secure_cookies = os.getenv(
+        "SESSION_COOKIE_SECURE", "false"
+    ).lower() in {"1", "true", "yes"}
+
     app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = False
+    app.config["SESSION_COOKIE_SAMESITE"] = os.getenv(
+        "SESSION_COOKIE_SAMESITE", "Lax"
+    )
+    app.config["SESSION_COOKIE_SECURE"] = secure_cookies
+
+    # Allow the local Vite dev server and any explicitly configured Vercel
+    # origin. Never use "*" here: credentialed CORS requests require an exact
+    # origin, and a wildcard would be rejected by the browser anyway.
+    origins = [
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173"
+        ).split(",")
+        if origin.strip()
+    ]
 
     # Initialize CORS.
     CORS(
         app,
         resources={
             r"/api/*": {
-                "origins": [
-                    "http://localhost:5173",
-                    "http://127.0.0.1:5173"
-                ]
+                "origins": origins
             }
         },
         supports_credentials=True

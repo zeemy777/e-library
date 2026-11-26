@@ -25,6 +25,29 @@ function getVideoEmbedUrl(url) {
   return null;
 }
 
+// Name the public-domain source shown on the reading button.
+function externalSource(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+
+    if (host === "gutenberg.org" || host === "www.gutenberg.org") {
+      return "Project Gutenberg";
+    }
+
+    if (host === "archive.org" || host === "www.archive.org") {
+      return "Internet Archive";
+    }
+
+    if (host === "openlibrary.org" || host === "www.openlibrary.org") {
+      return "Open Library";
+    }
+
+    return host;
+  } catch {
+    return "the source";
+  }
+}
+
 function HeartIcon() {
 
   return (
@@ -389,8 +412,8 @@ function ResourceModal({
               : "Save to your shelf"}
           </button>
 
-          {/* Borrowing is only offered for books. */}
-          {!isVideo && (
+          {/* Only local books can be borrowed; streamed titles are read online. */}
+          {!isVideo && (resource.can_borrow ?? !resource.is_remote) && (
             <div className="borrow-row">
 
               {isBorrowed ? (
@@ -424,7 +447,25 @@ function ResourceModal({
                 </p>
               )}
 
-              {currentUser && resource.readable && (
+              {currentUser && resource.external_url && (
+                <>
+                  <a
+                    className="primary-button external-read"
+                    href={resource.external_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Read on {externalSource(resource.external_url)} ↗
+                  </a>
+                  <p className="modal-hint">
+                    This edition streams from {externalSource(resource.external_url)}.
+                    Downloads are not available for streamed books.
+                  </p>
+                </>
+              )}
+
+              {currentUser && resource.readable
+                && !resource.external_url && (
                 <a
                   className="primary-button"
                   href={
@@ -438,14 +479,16 @@ function ResourceModal({
                 </a>
               )}
 
-              {currentUser && !resource.can_download && (
+              {currentUser && !resource.can_download
+                && !resource.external_url && (
                 <p className="modal-hint">
                   Download is not permitted for this book.
                 </p>
               )}
 
               {currentUser && resource.can_download
-                && !resource.has_file && (
+                && !resource.has_file
+                && !resource.external_url && (
                 <p className="modal-hint">
                   The book file has not been uploaded yet.
                 </p>

@@ -1,0 +1,65 @@
+# Render Blueprint: Flask API + private MySQL 8.
+# Deploy the Vercel frontend separately and point VITE_API_BASE_URL at the
+# public URL of the e-library-api service created by this Blueprint.
+
+services:
+  - type: web
+    name: e-library-api
+    runtime: docker
+    region: oregon
+    plan: 0.5c-512mb
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DB_HOST
+        fromService:
+          name: e-library-mysql
+          type: pserv
+          property: host
+      - key: DB_PORT
+        fromService:
+          name: e-library-mysql
+          type: pserv
+          property: port
+      - key: DB_NAME
+        value: e_library
+      - key: DB_USER
+        value: elibrary_app
+      - key: DB_PASSWORD
+        fromService:
+          name: e-library-mysql
+          type: pserv
+          envVarKey: MYSQL_PASSWORD
+      - key: APP_SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_COOKIE_SAMESITE
+        value: None
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: GUNICORN_THREADS
+        value: "2"
+
+  - type: pserv
+    name: e-library-mysql
+    runtime: image
+    region: oregon
+    plan: 1c-2g
+    image:
+      url: docker.io/mysql:8.0
+    envVars:
+      - key: MYSQL_DATABASE
+        value: e_library
+      - key: MYSQL_USER
+        value: elibrary_app
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_ROOT_PASSWORD
+        generateValue: true
+    disk:
+      name: mysql-data
+      mountPath: /var/lib/mysql
+      sizeGB: 10

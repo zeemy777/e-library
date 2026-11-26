@@ -485,6 +485,7 @@ const emptyResource = {
   publisher: "",
   description: "",
   video_url: "",
+  external_url: "",
   download_override: "inherit",
   is_published: false
 };
@@ -590,6 +591,7 @@ function ResourcesManager() {
       publisher: resource.publisher || "",
       description: resource.description || "",
       video_url: resource.video_url || "",
+      external_url: resource.external_url || "",
       download_override:
         resource.download_override === null
           ? "inherit"
@@ -618,6 +620,7 @@ function ResourcesManager() {
     data.append("publisher", form.publisher);
     data.append("description", form.description);
     data.append("video_url", form.video_url);
+    data.append("external_url", form.external_url);
     data.append("download_override", form.download_override);
     data.append(
       "is_published",
@@ -781,6 +784,21 @@ function ResourcesManager() {
                 })
               }
               placeholder="https://..."
+            />
+          </div>
+
+          <div>
+            <label>External Read Link</label>
+            <input
+              type="url"
+              value={form.external_url}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  external_url: event.target.value
+                })
+              }
+              placeholder="https://... (streams a book from its source)"
             />
           </div>
 

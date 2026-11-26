@@ -19,6 +19,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE_DIR))
 
 from config import Config  # noqa: E402
+from external_links import is_allowed_external_url  # noqa: E402
 from models import Resource  # noqa: E402
 from run import create_app  # noqa: E402
 
@@ -111,6 +112,20 @@ def audit_book(resource):
     return issues, pages
 
 
+def audit_remote(resource):
+    # Streamed books deliberately have no PDF. Their reading link must be an
+    # approved HTTPS source and their generated cover must exist on disk.
+    issues = []
+
+    if not is_allowed_external_url(resource.external_url):
+        issues.append(f"unrecognised reading link: {resource.external_url}")
+
+    if resource.file_path:
+        issues.append(f"streamed book should not have a PDF: {resource.file_path}")
+
+    return issues
+
+
 def audit_video(resource):
     url = resource.video_url or ""
 
@@ -138,10 +153,18 @@ def main():
     problems = 0
 
     with app.app_context():
-        resources = Resource.query.order_by(Resource.resource_type, Resource.title).all()
+        # Retired generated rows are kept for history but are not part of the
+        # live catalogue, so only published resources are audited.
+        resources = Resource.query.filter_by(
+            is_published=True
+        ).order_by(
+            Resource.resource_type, Resource.title
+        ).all()
 
         for resource in resources:
-            if resource.resource_type == "book":
+            if resource.resource_type == "book" and resource.external_url:
+                issues, detail = audit_remote(resource), "streamed"
+            elif resource.resource_type == "book":
                 issues, pages = audit_book(resource)
                 detail = f"{pages} pages" if pages else ""
             else:

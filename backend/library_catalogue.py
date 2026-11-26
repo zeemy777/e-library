@@ -24,6 +24,11 @@ CATEGORIES = [
         "allow_download": True
     },
     {
+        "name": "Fantasy",
+        "description": "Magic, myths, fairy tales and imagined worlds.",
+        "allow_download": True
+    },
+    {
         "name": "Mathematics",
         "description": "Pure and applied mathematics for every level.",
         "allow_download": True

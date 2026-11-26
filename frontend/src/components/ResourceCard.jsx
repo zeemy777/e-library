@@ -118,6 +118,10 @@ function ResourceCard({
             {isVideo ? "Video" : "Book"}
           </span>
 
+          {resource.is_remote && (
+            <span className="type-chip is-online">Online</span>
+          )}
+
           {resource.average_rating != null && (
             <span
               className="card-rating"

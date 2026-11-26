@@ -1,10 +1,13 @@
 
 // Flask API address.
-// The Vite dev server proxies /api to the Flask backend
-// (see vite.config.js), so the frontend and API share an
-// origin. Session cookies therefore work the same whether
-// the site is opened via localhost or 127.0.0.1.
-export const API_BASE_URL = "";
+// Locally the Vite dev server proxies /api to Flask, so the frontend and API
+// share an origin. On Vercel set VITE_API_BASE_URL to the public backend URL
+// (no trailing slash), for example https://e-library-api.up.railway.app.
+const configuredApi = (import.meta.env.VITE_API_BASE_URL || "").trim();
+
+export const API_BASE_URL = configuredApi
+  ? configuredApi.replace(/\/+$/, "")
+  : "";
 
 // Turn a relative upload path such as "covers/x.jpg" into
 // a URL the browser can load from the Flask backend.
@@ -52,12 +55,12 @@ export async function apiRequest(path, options = {}) {
       credentials: "include"
     });
 
-  } catch (error) {
+  } catch {
 
     // The browser could not reach the backend at all
     // (for example it has not been started yet).
     throw new Error(
-      "Could not reach the server. Make sure the Flask backend is running on port 5000, then try again."
+      "Could not reach the library server. Check the API URL and that the Flask backend is running."
     );
   }
 
