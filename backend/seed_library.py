@@ -134,8 +134,8 @@ def apply_book(resource, book, categories):
     )
 
     if remote:
-        # Streamed books have no local PDF, but they do get a small
-        # generated SVG cover served from the uploads folder.
+        # Streamed books have no local PDF. Their cover is a real public-domain
+        # scan where one was found, with a generated SVG as the last fallback.
         resource.file_path = None
         resource.cover_image = book.get("cover_image")
         return
@@ -208,9 +208,15 @@ def main():
                 resource.is_published = False
                 retired += 1
 
-        # Rename the original sample rows so their ids stay intact.
+        # Rename only the original sample rows so their ids stay intact.
+        # A title-only lookup also matches generated catalogue rows with the
+        # same name (MySQL collations are case-insensitive), which can steal
+        # their slug and break the unique constraint during a re-seed.
         for legacy_title, slug in LEGACY_TITLES.items():
-            resource = Resource.query.filter_by(title=legacy_title).first()
+            resource = Resource.query.filter(
+                Resource.id <= len(LEGACY_TITLES),
+                Resource.title == legacy_title
+            ).first()
 
             if not resource:
                 continue

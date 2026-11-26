@@ -356,7 +356,7 @@ E-Library/
 │  │  ├─ category_rules.py         # Shared book categorisation rules
 │  │  ├─ remote_covers.py          # Typographic SVG covers for streamed books
 │  │  ├─ build_remote_covers.py    # Add covers to an existing JSON catalogue
-│  │  └─ audit_library.py          # Verify PDFs match titles, covers exist
+│  │  └─ audit_library.py          # Verify PDFs match titles and covers are real
 │  ├─ requirements.txt
 │  ├─ requirements-dev.txt    # pytest + pypdf
 │  ├─ .env.example
@@ -439,7 +439,7 @@ npm run catalogue:fantasy    # refresh the 236 public-domain fantasy scan entrie
 npm run catalogue:subjects   # expand the six subject shelves from public scans
 # cd backend && python tools/build_subject_catalogue.py --covers-only  # resume covers
 npm run catalogue:reclassify # tidy categories in the committed JSON, offline
-npm run covers:public-domain # replace SVG covers with real scans where available
+npm run covers:public-domain # replace SVG/placeholder covers with real scans where available
 npm run seed                 # upsert categories, catalogue rows and demo accounts
 npm run audit                # verify every local file actually matches its title
 ```
@@ -459,7 +459,8 @@ the shelf collects public-domain fairy tales, myths, magical romances and
 imagined worlds. `tools/build_subject_catalogue.py` uses the same public-scan
 filter to expand Business, History, Literature, Mathematics, Science and
 Technology, capped at 500 new works per shelf and de-duplicated against the
-existing catalogues. The generated JSON is committed, so seeding works offline.
+existing catalogues. Both builders request large cover scans and reject tiny
+placeholder thumbnails. The generated JSON is committed, so seeding works offline.
 
 Categories are assigned by `tools/category_rules.py`, which weights titles over
 summaries, keeps science fiction in Literature, and moves goblins, enchanted
@@ -468,11 +469,13 @@ castles and fairy tales into the new **Fantasy** shelf.
 JSON without any network calls.
 
 `tools/remote_covers.py` still creates small SVG covers as a fallback, and
-`tools/fetch_public_domain_covers.py` replaces them with real scanned cover art
-where Open Library or the Internet Archive has an eligible public-domain scan.
-Today **245 of the 300 Gutenberg books**, **235 of the 236 fantasy books** and
-**1,481 of the 3,000 subject books** use real scans; the rest keep the
-typographic fallback. Streamed rows never store a
+`tools/fetch_public_domain_covers.py` retries every unsuitable cover: generated
+SVGs, Open Library's tiny placeholder thumbnails and low-resolution scans. It
+prefers large Open Library work covers, then the Internet Archive item attached
+to the row, Gutenberg's cover CDN and source searches. Only English works first
+published by 1929 with a public scan are accepted; books with no eligible scan
+keep their fallback. All 3,536 streamed books now resolve to real cover images,
+as do the 61 local books and 25 video thumbnails. Streamed rows never store a
 PDF, cannot be borrowed and open at their source through a 302 redirect; the 61
 local books remain fully readable, downloadable and borrowable offline.
 
@@ -480,7 +483,8 @@ local books remain fully readable, downloadable and borrowable offline.
 and trailer, requires at least five pages, and confirms the title, author and
 body text match the catalogue entry. Streamed books are checked for an allowed
 HTTPS reading link and the absence of a stray local PDF. It also verifies
-covers exist and that videos point at valid sources. The full catalogue of 3,622
+covers exist, rejects tiny placeholder thumbnails and invalid images, and
+verifies that videos point at valid sources. The full catalogue of 3,622
 resources passes with **0 problems** — this catches the classic "cover says one
 book, PDF contains another" mistake.
 

@@ -20,6 +20,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE_DIR))
 
+from fetch_public_domain_covers import is_real_cover  # noqa: E402
 from library_catalogue import BOOKS  # noqa: E402
 from remote_covers import COVER_DIR, write_covers  # noqa: E402
 
@@ -221,7 +222,7 @@ def description_of(doc):
 def cover_path(slug, cover_id):
     COVER_DIR.mkdir(parents=True, exist_ok=True)
     path = COVER_DIR / f"{slug}.jpg"
-    url = f"{COVERS}/{cover_id}-M.jpg"
+    url = f"{COVERS}/{cover_id}-L.jpg"
 
     for attempt in range(3):
         try:
@@ -233,7 +234,7 @@ def cover_path(slug, cover_id):
             with urllib.request.urlopen(request, timeout=30) as response:
                 data = response.read()
 
-            if data[:3] == b"\xff\xd8\xff" and len(data) > 2000:
+            if is_real_cover(data):
                 path.write_bytes(data)
                 return f"covers/{slug}.jpg"
             break

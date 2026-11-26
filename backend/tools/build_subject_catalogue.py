@@ -22,6 +22,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE_DIR))
 
+from fetch_public_domain_covers import is_real_cover  # noqa: E402
 from library_catalogue import BOOKS  # noqa: E402
 from remote_covers import COVER_DIR, write_covers  # noqa: E402
 
@@ -281,7 +282,7 @@ def download_cover(book):
     if not cover_id:
         return None
 
-    url = f"{COVERS}/{cover_id}-S.jpg"
+    url = f"{COVERS}/{cover_id}-L.jpg"
 
     for attempt in range(2):
         try:
@@ -293,7 +294,7 @@ def download_cover(book):
             with urllib.request.urlopen(request, timeout=20) as response:
                 data = response.read()
 
-            if data[:3] == b"\xff\xd8\xff" and len(data) > 1000:
+            if is_real_cover(data):
                 path.write_bytes(data)
                 return f"covers/{slug}.jpg"
             break

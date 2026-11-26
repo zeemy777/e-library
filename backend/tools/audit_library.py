@@ -17,8 +17,10 @@ from pypdf import PdfReader
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config import Config  # noqa: E402
+from fetch_public_domain_covers import cover_state as cover_quality  # noqa: E402
 from external_links import is_allowed_external_url  # noqa: E402
 from models import Resource  # noqa: E402
 from run import create_app  # noqa: E402
@@ -170,10 +172,20 @@ def main():
             else:
                 issues, detail = audit_video(resource), "video"
 
-            if resource.cover_image and not (UPLOAD_DIR / resource.cover_image).is_file():
-                issues.append(f"cover missing: {resource.cover_image}")
-            elif not resource.cover_image:
+            if not resource.cover_image:
                 issues.append("no cover image")
+            else:
+                quality = cover_quality({
+                    "slug": resource.slug or "",
+                    "cover_image": resource.cover_image
+                })
+
+                if quality in ("missing", "invalid", "placeholder"):
+                    issues.append(
+                        f"{quality} cover: {resource.cover_image}"
+                    )
+                elif not (UPLOAD_DIR / resource.cover_image).is_file():
+                    issues.append(f"cover missing: {resource.cover_image}")
 
             status = "OK  " if not issues else "FAIL"
             problems += bool(issues)
